@@ -10,9 +10,9 @@ class ApiResponse {
     return new ApiResponse(statusCode, true, message, data);
   }
 
-  static error(message, data = null) {
-    return new ApiResponse(false, message, data);
-  }
+  static error(statusCode, message, data = null) {
+  return new ApiResponse(statusCode, false, message, data);
+}
 }
 
 export default ApiResponse; 
