@@ -12,7 +12,7 @@ const generateAccessAndRefereshTokens = async(userId) => {
             throw new ApiError(404, "User not found");
         }
         const accessToken = user.generateaccessToken();
-        const refreshToken = user.generaterefreshToken();
+        const refreshToken = user.generateRefreshToken();
 
         user.refreshToken = refreshToken; // we are storing the refresh token in the user document in the database, so that we can verify it later when the user sends a request to refresh the access token using the refresh token
         await user.save({validateBeforeSave: false}); // we are not validating before save because we are not changing any required field, and we want to avoid any validation error if some required field is missing in the user document
@@ -147,9 +147,14 @@ const loginUser = asynchandler (async (req, res) => {
 });
 
 const logoutUser = asynchandler (async (req, res) => {
-    User.findByIdAndUpdate(
+    const options = {
+        httpOnly: true,
+        secure: true
+    };
+    await User.findByIdAndUpdate(
         req.user._id,
         {
+            
             $set: {
                 refreshToken: undefined,
             }
