@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import {User} from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudnary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import jwt from "jsonwebtoken";
 //import { use } from "react";
 
 const generateAccessAndRefereshTokens = async(userId) => {
@@ -171,8 +172,122 @@ const logoutUser = asynchandler (async (req, res) => {
     .json(new ApiResponse(200, null, "User logged out successfully"));
 });
 
+const refreshAccessToken = asynchandler (async (req, res) => {
+    const incomingRefreshToken = req.cookies.
+    refreshToken || req.body.refreshToken;
+
+    if(!incomingRefreshToken) {
+        throw new ApiError(401, "unauthorized access - refresh token missing");
+    }
+    
+    // verify the incoming refresh token
+    try {
+        const decodedToken = jwt.verify(
+            incomingRefreshToken,
+            process.env.JWT_REFRESH_SECRET,
+            
+        )
+        const user = await User.findById(decodedToken?._id)
+        if(!user) {
+            throw new ApiError(404, "User not found");
+        }
+        if(incomingRefreshToken !== user.refreshToken) {
+            throw new ApiError(401, "Unauthorized access - invalid refresh token");
+        } 
+    
+        const options = {
+            httpOnly: true,
+            secure: true
+        };  
+        const {accessToken, newRefreshToken} = await generateAccessAndRefereshTokens(user._id);
+    
+        return res
+        .status(200)
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", newRefreshToken, options)
+        .json(
+            new ApiResponse(
+                200,
+                {
+                    accessToken,
+                    newRefreshToken
+                },
+                "Access token refreshed successfully"
+            )
+        );
+    } catch (error) {
+        throw new ApiError(401, error?.message || "Invalid refresh token"); 
+    }
+});
+
+const changecurrentUserPassword = asynchandler (async (req, res) => {
+    // get current user id from req.user
+    // get old password and new password from req.body
+    // find the user in the database
+    // compare the old password with the password in the database
+    // if they match, update the password with the new password
+    // save the user document
+    // send response
+    const{ oldPassword, newPassword} = req.body;
+    
+    const user = await User.findById(req.user?._id);
+    const isPasswordValid = await user.comparePassword(oldPassword);
+
+    if(!isPasswordValid) {
+        throw new ApiError(401, "Invalid old password");
+    }
+    user.password = newPassword;
+    await user.save();
+    return res.status(200).json(new ApiResponse(200, null, "Password changed successfully"));
+});
+
+const getcurrentUserDetails = asynchandler (async (req, res) => {
+    // get current user id from req.user
+    // find the user in the database
+    // send response with user details except password and refresh token
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            req.user,
+            "User details fetched successfully"
+        )
+    );
+});
+
+const updateAccountDetails = asynchandler (async (req, res) => {
+    // get current user id from req.user
+    // get updated details from req.body and req.files
+    // validate the updated details
+    const {fullname, username} = req.body;
+    if(!fullname || !username) {
+        throw new ApiError(400, "All fields are required");
+    }
+
+    const user = User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                fullname,
+                username
+            }
+        },
+        {new: true}
+
+    ).select("-password -refreshToken");
+    return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Account details updated successfully"));
+});
+
+
+
 export {
     registerUser,
     loginUser,
-    logoutUser
+    logoutUser,
+    refreshAccessToken,
+    changecurrentUserPassword,
+    getcurrentUserDetails,
+    updateAccountDetails
+    
 };
