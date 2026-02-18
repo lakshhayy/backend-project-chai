@@ -31,7 +31,7 @@ const userSchema = new Schema({
         default: null,
         required: true,
     },
-    coverimage: {
+    coverImage: {
         type: String,
     },
     password: {

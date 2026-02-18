@@ -6,6 +6,8 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 //import { use } from "react";
 
+
+
 const generateAccessAndRefereshTokens = async(userId) => {
     try {
         const user = await User.findById(userId);
@@ -332,6 +334,76 @@ const updateUserCoverImage = asynchandler (async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, user, "Cover image updated successfully"));
 });
+
+const getUserChannelProfile = asynchandler (async (req, res) => {
+    // get user id from req.params
+    // find the user in the database 
+    const {username} = req.params;
+
+    if(!username?.trim()){ // if username is not provided or is empty
+        throw new ApiError(400, "Username is required");
+    }
+    const channel = await User.aggregate([
+        {
+            $match: {
+                username: username?.toLowerCase()
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel", // we are looking for the documents in the subscriptions collection where the channel field matches the _id of the user document, which means we are looking for the subscribers of this channel
+                as: "subscribers"  // the result of this lookup will be an array of subscription documents, where each document represents a subscriber of this channel
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber", // we are looking for the documents in the subscriptions collection where the subscriber field matches the _id of the user document, which means we are looking for the channels this user is subscribed to
+                as: "subscribedTo" // the result of this lookup will be an array of subscription documents, where each document represents a channel this user is subscribed to
+            }
+        },
+        {
+            $addFields: {
+                subscriberCount: {
+                    $size: "$subscribers" // we are adding a new field called subscriberCount, which will be the size of the subscribers array, which means the number of subscribers this channel has
+                },
+                channelsSubscribedTo: {
+                    $size: "$subscribedTo" // we are adding a new field called channelsSubscribedTo, which will be the size of the subscribedTo array, which means the number of channels this user is subscribed to
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: {
+                            $in: [ req.user?._id, "$subscribers.subscriber"] 
+                        },
+                        then: true,
+                        else: false
+                    }
+                },
+                
+            }   
+        },
+        {
+        $project: {
+            fullname: 1,
+            username: 1,
+            avatar: 1,
+            coverImage: 1,
+            subscriberCount: 1,
+            channelsSubscribedTo: 1,
+            isSubscribed: 1,
+        }
+    }
+    ]);
+
+    if(!channel?.length) { // if the channel array is empty, which means no user was found with the given username
+        throw new ApiError(404, "Channel not found");
+    }
+    return res.status(200)
+    .json(new ApiResponse(200, channel[0], "Channel profile fetched successfully"));
+}); 
  
 export {
     registerUser,
@@ -341,5 +413,8 @@ export {
     changecurrentUserPassword,
     getcurrentUserDetails,
     updateAccountDetails,
-    updateUserAvatar
+    updateUserAvatar,
+    updateUserCoverImage,
+    getUserChannelProfile
+
 };
